@@ -1,0 +1,211 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {// Structure pour représenter un graphe
+    int taille;           // Nombre de sommets
+    int **matrice_adj;    // Matrice d'adjacence
+} Graphe;
+
+typedef struct { // Structure d'une station
+    int nb_sommets;      // Nombre de sommet
+    int sommets[35];    // Liste des sommets
+} Station;
+
+//les sommets correspondent aux operations
+int Exclure(int sommet, int op, int E[][2], int nb_contraintes){ // Fonction qui verifie si deux sommets sont exclues l'une de l'autre
+    for (int i = 0; i < nb_contraintes; i++) {
+        if ((E[i][0] == sommet && E[i][1] == op) || (E[i][0] == op && E[i][1] == sommet)) {  // Les sommets sont exclues si ils forment une paire
+            return 1; // Retourne 1 si les sommets sont exclues
+        }
+    }
+    return 0; // Retourne 0 si les sommets ne sont pas exclues
+}
+
+int Preceder(int place_sommets[], int sommet1, int sommet2, int E[][2], int nb_contraintes){//Fonction qui verifie si un sommet precede un autre dans un ordre topologique
+    if (place_sommets[sommet2]) {
+        for (int i = 0; i < nb_contraintes; i++) {
+            if (E[i][1] == sommet2 && place_sommets[E[i][0]] && !place_sommets[sommet1]) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+
+int Repartir_stations(int taille, int E[][2], int nb_contrainte, int ordreTopologique[], Station stations[]){//fonction qui repartit les operations en fonction de l'exclusion et de la precdence
+    int nb_stations = 0;
+    int place_sommets[35] = {0};
+    for (int i = taille - 1; i >= 0; i--){// on parcourt les operations/sommets, on inverse car les sommets etaient ranger à l'envers donc on fait du plus grans au plus petit
+        int sommet = ordreTopologique[i];
+        int attribue = 0;//permet de voir si une operation est attribuer à une station
+
+        for (int j = 0; j < nb_stations; j++){//on parcourt les stations qui existent
+            int interieur_station = 1;
+            for (int k = 0; k < stations[j].nb_sommets; k++){// parcourir les stations pour voir si on peut l'ajouter quelque part en respectant toute la contrainte exclusion et de precedence
+                if (Exclure(sommet, stations[j].sommets[k], E, nb_contrainte) || !Preceder(place_sommets, sommet, stations[j].sommets[k], E, nb_contrainte)){
+                    interieur_station = 0;
+                    break;
+                }
+            }
+            if (interieur_station){// si le sommet peut etre ajoute on l'ajoute
+                stations[j].sommets[stations[j].nb_sommets++] = sommet;
+                place_sommets[sommet] = 1;
+                attribue = 1;
+                break;
+            }
+        }
+        if (!attribue){// si on a trouve aucune station on en cree une nouvelle
+            stations[nb_stations].sommets[0] = sommet;
+            stations[nb_stations].nb_sommets = 1;
+            place_sommets[sommet] = 1;
+            nb_stations++;
+        }
+    }
+    return nb_stations;// Retourne le nombre total de stations crees
+}
+
+void Explorer(Graphe* graphe, int sommet, int* marque, int* ordre, int* index){// fonction recursive pour explorer le graphe
+    marque[sommet] = 1;//on marque un sommet
+
+    for (int i = 0; i < graphe->taille; i++) {    // explorer les suivants non marques
+        if (graphe->matrice_adj[sommet][i] && !marque[i]) {
+            Explorer(graphe, i, marque, ordre, index);
+        }
+    }
+    ordre[(*index)++] = sommet;// On ajoute un sommet dans l'ordre topologique
+}
+
+void Ordre_topologique(Graphe *graphe, int E[][2], int nb_contraintes, int sommets[], Station stations[]){
+    int *nombre_antecedents = (int *)malloc(graphe->taille * sizeof(int));//on initialise
+    int *marque = (int *)malloc(graphe->taille * sizeof(int));
+    int *ordre_topologique = (int *)malloc(graphe->taille * sizeof(int));
+    int index = 0;
+
+    for (int i = 0; i < graphe->taille; i++){// on initialise les marques et le nombre d'antecdent à 0
+        nombre_antecedents[i] = 0;
+        marque[i] = 0;
+    }
+    for (int i = 0; i < graphe->taille; i++){//calcul des antecedents pour tout les sommets
+        for (int j = 0; j < graphe->taille; j++){
+            if (graphe->matrice_adj[j][i]){
+                nombre_antecedents[i]++;
+            }
+        }
+    }
+    for (int i = 0; i < graphe->taille; i++){//si le sommet n'est pas marque on va appeler la fonction explorer
+        if (!marque[i]){
+            Explorer(graphe, i, marque, ordre_topologique, &index);
+        }
+    }
+    int nb_stations = Repartir_stations(graphe->taille, E, nb_contraintes, ordre_topologique, stations);
+
+    for (int i = 0; i < nb_stations; i++){//afficher les sommets/operation dans chaque sommet
+        printf("Station %d : ", i + 1);
+        for (int j = 0; j < stations[i].nb_sommets; j++){
+            printf("%d ", stations[i].sommets[j] + 1);
+        }
+        printf("\n");
+    }
+    printf("Le nombre minimal de stations est : %d\n", nb_stations);
+
+    free(nombre_antecedents);//liberation de la memoire
+    free(marque);
+    free(ordre_topologique);
+}
+
+Graphe* Creer_graphe(int taille){ // Fonction qui creer un graphe en fontion de la taille
+    Graphe* graphe = (Graphe*)malloc(sizeof(Graphe));
+    graphe->taille = taille;//on initialise la taille du graphe
+    graphe->matrice_adj = (int**)malloc(taille * sizeof(int*));// allocation de la matrice d'adjacence
+
+    for (int i = 0; i < taille; i++) {//on met la matrice à 0
+        graphe->matrice_adj[i] = (int*)malloc(taille * sizeof(int));
+        for (int j = 0; j < taille; j++) {
+            graphe->matrice_adj[i][j] = 0;
+        }
+    }
+    return graphe;// on retourne le graphe creer
+}
+
+void Ajouter_arete(Graphe* graphe, int id1, int id2){// fonction pour ajouter une arrete sur le graphe
+    if (id1 >= 0 && id1 < graphe->taille && id2 >= 0 && id2 < graphe->taille) {// on verifie que les sommets correpondent entre 1 et 35
+        graphe->matrice_adj[id1][id2] = 1;//ajout d'une arrete orienté
+    }
+}
+
+Graphe* Lire_Graphe(char* fichierPrecedences, char* Fichier_sommets){ // Fonction qui lit le graphe avec les fichiers textes
+    Graphe* graphe;
+    FILE* fprecedence = fopen(fichierPrecedences, "r");//ouvre le fichier de precedence
+    if (!fprecedence) {
+        printf("Erreur de lecture du fichier de precedences\n");
+        exit(-1);
+    }
+
+    FILE* fsommet = fopen(Fichier_sommets, "r");// ouvre le fichier des sommets
+    if (!fsommet) {
+        printf("Erreur de lecture du fichier des sommets\n");
+        exit(-1);
+    }
+    int taille;
+    fscanf(fsommet, "%d", &taille);//lit la taille du fichier
+
+    graphe = Creer_graphe(taille);// creer le graphe
+    int id1,id2;
+    for (int i = 0; i < taille; ++i) {// lecture des sommets
+        fscanf(fsommet, "%d", &id1);
+    }
+    while (fscanf(fprecedence, "%d %d", &id1, &id2) == 2) {//lit les precdences et on ajoute des arretes au graphe
+        Ajouter_arete(graphe, id1 - 1, id2 - 1);
+    }
+    fclose(fprecedence);// on ferme les fichiers
+    fclose(fsommet);
+    return graphe;// on retourne le graphe creer
+}
+
+int main(){
+    Graphe *g;
+    char fichier_precedences[] = "precedences.txt";
+    char fichier_sommets[] = "sommets.txt";
+    char fichier_exclusions[] = "exclusions.txt";
+
+    g = Lire_Graphe(fichier_precedences, fichier_sommets);// on lit le graphe depuis les fichiers precdences et sommets
+
+    int taille = g->taille;
+    int E[35 * (35 - 1) / 2][2];
+    int nb_contraintes = 0;
+    int sommets[35];
+
+    FILE *fsommets = fopen(fichier_sommets, "r");//ouvre le fichier
+    if (fsommets == NULL) {
+        perror("Erreur lors de l'ouverture du fichier des sommets");
+        return 1;
+    }
+    fscanf(fsommets, "%d", &taille);// on recupere la taille
+    for (int i = 0; i < taille; i++){
+        fscanf(fsommets, "%d", &sommets[i]);// on recupere les sommets
+    }
+    fclose(fsommets);//on ferme le fichier
+
+    FILE *fexclusions = fopen("exclusions.txt", "r");// ouvre le fichier d'exclusion
+    if (fexclusions == NULL) {
+        perror("Erreur lors de l'ouverture du fichier d'exclusions");
+        return 1;
+    }
+    while (fscanf(fexclusions, "%d %d", &E[nb_contraintes][0], &E[nb_contraintes][1]) == 2) {//lit les paires qui ne peuvent pas etre dans la meme station
+        nb_contraintes++;//comme on sait pas combien il y en a on le fait tant qu'on detecte de valeur à coté
+    }
+    fclose(fexclusions);// ferme le fichier d'exclusion
+
+    Station stations[taille]; // Tableau pour stocker les stations avec leurs sommets
+
+    Ordre_topologique(g, E, nb_contraintes, sommets, stations);// On appel la fonction qui permet de repartir les sommets
+
+    for (int i = 0; i < g->taille; i++){//libere la memoire allouer
+        free(g->matrice_adj[i]);
+    }
+    free(g->matrice_adj);
+    free(g);
+
+    return 0;
+}
