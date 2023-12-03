@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int operation;
+    float temps;
+} Operation;
+
+typedef struct {
+    int nb_sommets;
+    int sommets[35];
+    float temps_total;
+} Station;
+
+typedef struct {
+    int op1;
+    int op2;
+} Exclusion;
+
+typedef struct {
+    int op1;
+    int op2;
+} Precedence;
+
+int Exclure(int op1, int op2, Exclusion exclusions[], int nbExclusions) {
+    for (int i = 0; i < nbExclusions; i++) {
+        if ((exclusions[i].op1 == op1 && exclusions[i].op2 == op2) ||
+            (exclusions[i].op1 == op2 && exclusions[i].op2 == op1)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int Preceder(int op1, int op2, Precedence precedences[], int nbPrecedences) {
+    for (int i = 0; i < nbPrecedences; i++) {
+        if (precedences[i].op1 == op1 && precedences[i].op2 == op2) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int compareTemps(const void *a, const void *b) {
+    return ((Operation *)a)->temps - ((Operation *)b)->temps;
+}
+
+int Repartir_stations(int taille, Operation operations[], Exclusion exclusions[], int nb_exclusions, Precedence precedences[], int nb_precedences, Station stations[], float temps_cycle) {
+    int nb_stations = 0;
+    qsort(operations, taille, sizeof(Operation), compareTemps);
+
+    for (int i = 0; i < taille; i++) {
+        int operation = operations[i].operation;
+        float temps_execution = operations[i].temps;
+
+        int attribue = 0;
+
+        for (int j = 0; j < nb_stations; j++) {
+            int interieur_station = 1;
+
+            for (int k = 0; k < stations[j].nb_sommets; k++) {
+                if (Exclure(operation, stations[j].sommets[k], exclusions, nb_exclusions) || !Preceder(operation, stations[j].sommets[k], precedences, nb_precedences)) {
+                    interieur_station = 0;
+                    break;
+                }
+            }
+
+            if (interieur_station) {
+                if (stations[j].temps_total + temps_execution <= temps_cycle) {
+                    stations[j].sommets[stations[j].nb_sommets++] = operation;
+                    stations[j].temps_total += temps_execution;
+                    attribue = 1;
+                    break;
+                }
+            }
+        }
+
+        if (!attribue) {
+            stations[nb_stations].sommets[0] = operation;
+            stations[nb_stations].nb_sommets = 1;
+            stations[nb_stations].temps_total = temps_execution;
+            nb_stations++;
+        }
+    }
+
+    return nb_stations;
+}
+
+void Afficher_stations(Station stations[], int nb_stations) {
+    for (int i = 0; i < nb_stations; i++) {
+        printf("Station %d : ", i + 1);
+        for (int j = 0; j < stations[i].nb_sommets; j++) {
+            printf("%d ", stations[i].sommets[j]);
+        }
+        printf("\nTemps total d'execution dans la station : %.2f\n", stations[i].temps_total);
+    }
+}
+
+int main() {
+    char fichier_operations[] = "operations.txt";
+    char fichier_exclusions[] = "exclusions.txt";
+    char fichier_precedences[] = "precedences.txt";
+    char fichier_temps_cycle[] = "temps_cycle.txt";
+
+    FILE *foperations = fopen(fichier_operations, "r");
+    if (foperations == NULL) {
+        perror("Erreur lors de l'ouverture du fichier des opérations");
+        return 1;
+    }
+
+    int compter_operation = 0;
+    Operation operations[35];
+    while (fscanf(foperations, "%d %f", &operations[compter_operation].operation, &operations[compter_operation].temps) == 2) {
+        compter_operation++;
+    }
+    fclose(foperations);
+
+    FILE *fexclusions = fopen(fichier_exclusions, "r");
+    if (fexclusions == NULL) {
+        perror("Erreur lors de l'ouverture du fichier d'exclusions");
+        return 1;
+    }
+
+    int nb_exclusions = 0;
+    Exclusion exclusions[35 * (35 - 1) / 2];
+    while (fscanf(fexclusions, "%d %d", &exclusions[nb_exclusions].op1, &exclusions[nb_exclusions].op2) == 2) {
+        nb_exclusions++;
+    }
+    fclose(fexclusions);
+
+    FILE *fprecedes = fopen(fichier_precedences, "r");
+    if (fprecedes == NULL) {
+        perror("Erreur lors de l'ouverture du fichier de précedences");
+        return 1;
+    }
+
+    int nb_precedences = 0;
+    Precedence precedences[35 * (35 - 1) / 2];
+    while (fscanf(fprecedes, "%d %d", &precedences[nb_precedences].op1, &precedences[nb_precedences].op2) == 2) {
+        nb_precedences++;
+    }
+    fclose(fprecedes);
+
+    FILE *ftemps_cycle = fopen(fichier_temps_cycle, "r");
+    if (ftemps_cycle == NULL) {
+        perror("Erreur lors de l'ouverture du fichier temps_cycle.txt");
+        return 1;
+    }
+
+    float temps_cycle;
+    fscanf(ftemps_cycle, "%f", &temps_cycle);
+    fclose(ftemps_cycle);
+
+    Station stations[35];
+
+    int nb_stations = Repartir_stations(compter_operation, operations, exclusions, nb_exclusions, precedences, nb_precedences, stations, temps_cycle);
+
+    Afficher_stations(stations, nb_stations);
+
+    return 0;
+}
