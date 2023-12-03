@@ -1,0 +1,113 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {//structure d'une operation avec son temps d'execution
+    int operation;
+    float temps;
+} Operation;
+
+typedef struct {//structure d'une station
+    int nb_sommets;//nombre de sommets
+    int sommets[35];
+    float temps_total; //le temps total d'execution
+} Station;
+
+typedef struct {//structure de l'exclusion de deux sommets/operations
+    int op1;
+    int op2;
+} Exclusion;
+
+int Exclure(int op1, int op2, Exclusion exclusions[], int nbExclusions){// fonction pour verifier si deux operations sont exclues l'une de l'autre
+    for (int i = 0; i < nbExclusions; i++) {
+        if ((exclusions[i].op1 == op1 && exclusions[i].op2 == op2) ||
+            (exclusions[i].op1 == op2 && exclusions[i].op2 == op1)) {
+            return 1; //les operations sont exclues
+        }
+    }
+    return 0;// les operations ne sont pas exclues
+}
+
+int Repartir_stations(int taille, Operation operations[], Exclusion exclusions[], int nb_exclusions, Station stations[]){//fonction qui repartit les operations en fonction de l'exclusion et du temps
+    int nb_stations = 0;
+
+    for (int i = 0; i < taille; i++) {// on parcourt les operations/sommets
+        int operation = operations[i].operation;
+        float temps_execution = operations[i].temps;
+
+        int attribue = 0; //permet de voir si une operation est attribuer à une station
+
+        for (int j = 0; j < nb_stations; j++) { //on parcourt les stations qui existent
+            int interieur_station = 1;
+
+            for (int k = 0; k < stations[j].nb_sommets; k++) {// parcourir les stations pour voir si on peut l'ajouter quelque part
+                if (Exclure(operation, stations[j].sommets[k], exclusions, nb_exclusions)) {
+                    interieur_station = 0;
+                    break;
+                }
+            }
+            if (interieur_station) {// si le sommet peut etre ajoute on l'ajoute
+                stations[j].sommets[stations[j].nb_sommets++] = operation;
+                stations[j].temps_total += temps_execution;
+                attribue = 1;
+                break;
+            }
+        }
+        if (!attribue) {// si on a trouve aucune station on en cree une nouvelle
+            stations[nb_stations].sommets[0] = operation;
+            stations[nb_stations].nb_sommets = 1;
+            stations[nb_stations].temps_total = temps_execution;
+            nb_stations++;
+        }
+    }
+    return nb_stations;// Retourne le nombre total de stations creees
+}
+
+int main() {
+    FILE *foperations = fopen("operations.txt", "r");// ouvre le fichier
+    if (foperations == NULL) {
+        perror("Erreur lors de l'ouverture du fichier des opérations");
+        return 1;
+    }
+    int compter_operation = 0;
+    Operation operations[35];
+    while (fscanf(foperations, "%d %f", &operations[compter_operation].operation, &operations[compter_operation].temps) == 2) {//on lit les operations et les temps dans le fichier
+        compter_operation++;
+    }
+    fclose(foperations);//on ferme le fichier
+
+    FILE *fexclusions = fopen("exclusions.txt", "r");//ouvre le fichier
+    if (fexclusions == NULL) {
+        perror("Erreur lors de l'ouverture du fichier d'exclusions");
+        return 1;
+    }
+
+    int nb_exclusions = 0;
+    Exclusion exclusions[35 * (35 - 1) / 2];
+    while (fscanf(fexclusions, "%d %d", &exclusions[nb_exclusions].op1, &exclusions[nb_exclusions].op2) == 2) {//on lit les exclusions du fichier
+        nb_exclusions++;
+    }
+    fclose(fexclusions);//on ferme le fichier
+
+    FILE *ftemps_cycle = fopen("temps_cycle.txt", "r");//ouverture du fuchuer
+    if (ftemps_cycle == NULL) {
+        perror("Erreur lors de l'ouverture du fichier temps_cycle.txt");
+        return 1;
+    }
+    int temps_cycle;
+    fscanf(ftemps_cycle, "%d", &temps_cycle);//on recupere le temps du cycle dans le fichier
+    fclose(ftemps_cycle);//on ferme le fichier
+
+    Station stations[35];// stocker les operations dans des stations
+
+    int nb_stations = Repartir_stations(compter_operation, operations, exclusions, nb_exclusions, stations);//on appel la fonction qui repartit les operations
+
+    for (int i = 0; i < nb_stations; i++) { // on va afficher les sommets dans les stations et le temps d'execution pour chaque station
+        printf("Station %d : ", i + 1);
+        for (int j = 0; j < stations[i].nb_sommets; j++) {
+            printf("%d ", stations[i].sommets[j]);
+        }
+        printf(" - Temps total : %.2f\n", stations[i].temps_total);
+    }
+    printf("Le nombre minimal de stations est : %d\n", nb_stations);
+    return 0;
+}
