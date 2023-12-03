@@ -1,0 +1,182 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {// Structure pour représenter un graphe
+    int taille;           // Nombre de sommets
+    int **matrice_adj;    // Matrice d'adjacence
+} Graphe;
+
+// Les fonctions du graphe
+Graphe* Creer_graphe(int taille);
+void Ajouter_arete(Graphe* graphe, int id1, int id2);
+void Explorer(Graphe* graphe, int sommet, int* marque, int* ordre, int* index);
+void Ordre_topologique_temps(Graphe* graphe, char* Fichier_operations, char* Fichier_temps_cycle);
+
+Graphe* Lire_graphe(char* fichierPrecedences, char* Fichier_sommets){ // Fonction qui lit le graphe avec les fichiers textes
+    Graphe* graphe;
+    FILE* fprecedence = fopen(fichierPrecedences, "r");//ouvre le fichier de precedence
+    if (!fprecedence) {
+        printf("Erreur de lecture du fichier de precedences\n");
+        exit(-1);
+    }
+
+    FILE* fsommet = fopen(Fichier_sommets, "r");// ouvre le fichier des sommets
+    if (!fsommet) {
+        printf("Erreur de lecture du fichier des sommets\n");
+        exit(-1);
+    }
+    int taille;
+    fscanf(fsommet, "%d", &taille);//lit la taille du fichier
+
+    graphe = Creer_graphe(taille);// creer le graphe
+    int id1,id2;
+    for (int i = 0; i < taille; ++i) {// lecture des sommets
+        fscanf(fsommet, "%d", &id1);
+    }
+    while (fscanf(fprecedence, "%d %d", &id1, &id2) == 2) {//lit les precdences et on ajoute des arretes au graphe
+        Ajouter_arete(graphe, id1 - 1, id2 - 1);
+    }
+    fclose(fprecedence);// on ferme les fichiers
+    fclose(fsommet);
+    return graphe;// on retourne le graphe creer
+}
+
+Graphe* Creer_graphe(int taille){ // Fonction qui creer un graphe en fontion de la taille
+    Graphe* graphe = (Graphe*)malloc(sizeof(Graphe));
+    graphe->taille = taille;//on initialise la taille du graphe
+    graphe->matrice_adj = (int**)malloc(taille * sizeof(int*));// allocation de la matrice d'adjacence
+
+    for (int i = 0; i < taille; i++) {//on met la matrice à 0
+        graphe->matrice_adj[i] = (int*)malloc(taille * sizeof(int));
+        for (int j = 0; j < taille; j++) {
+            graphe->matrice_adj[i][j] = 0;
+        }
+    }
+    return graphe;// on retourne le graphe creer
+}
+void Ajouter_arete(Graphe* graphe, int id1, int id2){// fonction pour ajouter une arrete sur le graphe
+    if (id1 >= 0 && id1 < graphe->taille && id2 >= 0 && id2 < graphe->taille) {// on verifie que les sommets correpondent entre 1 et 35
+        graphe->matrice_adj[id1][id2] = 1;//ajout d'une arrete orienté
+    }
+}
+
+void Explorer(Graphe* graphe, int sommet, int* marque, int* ordre, int* index){// fonction recursive pour explorer le graphe
+    marque[sommet] = 1;//on marque un sommet
+
+    for (int i = 0; i < graphe->taille; i++) {    // explorer les suivants non marques
+        if (graphe->matrice_adj[sommet][i] && !marque[i]) {
+            Explorer(graphe, i, marque, ordre, index);
+        }
+    }
+    ordre[(*index)++] = sommet;// On ajoute un sommet dans l'ordre topologique
+}
+
+void Ordre_topologique_temps(Graphe* graphe, char* Fichier_operations, char* Fichier_temps_cycle){// fonction qui va trier suivant l'ordre et le temps
+
+    FILE* ftempscycle = fopen(Fichier_temps_cycle, "r");// lit le fichier de temps de cycle
+    if (!Fichier_temps_cycle) {
+        perror("Erreur lors de l'ouverture du fichier du temps de cycle");
+        exit(-1);
+    }
+    int temps_cycle;
+    fscanf(ftempscycle, "%d", &temps_cycle);// on recupere le temps de cycle qui est de 10 sec
+    fclose(ftempscycle);//ferme le fichier
+
+    FILE* foperations = fopen(Fichier_operations, "r");
+    if (!foperations) {
+        perror("Erreur lors de l'ouverture du fichier des temps d'opérations");
+        exit(-1);
+    }
+    float* temps_operation = (float*)malloc(graphe->taille * sizeof(float));//il y a des virgules donc float
+
+    for (int i = 1; i < graphe->taille; ++i) {//lecture des temps des operations
+        int id;
+        float temps;
+        fscanf(foperations, "%d %f", &id, &temps);
+        temps_operation[id] = temps; //on note les operations de 1 à 35 et on leur associe un temps
+    }
+    fclose(foperations);//ferme le fichier
+
+    int** stations = (int**)malloc(sizeof(int*) * graphe->taille);  //on cree une liste pour chaque station
+    int* taille_stations = (int*)malloc(sizeof(int) * graphe->taille);
+    float* temps_stations = (float*)malloc(sizeof(float) * graphe->taille);
+
+    int* nombre_antecedents = (int*)malloc(graphe->taille * sizeof(int));// calculer le nombre d'antecedent
+    int* marque = (int*)malloc(graphe->taille * sizeof(int));// permet de marquer les sommets
+
+    for (int i = 0; i < graphe->taille; i++) {//on initialise
+        stations[i] = (int*)malloc(sizeof(int) * graphe->taille);
+        taille_stations[i] = 0;
+        temps_stations[i] = 0.0;
+        nombre_antecedents[i] = 0;
+        marque[i] = 0;
+    }
+    for (int i = 0; i < graphe->taille; i++) {//calcul des antecedents pour tout les sommets
+        for (int j = 0; j < graphe->taille; j++) {
+            if (graphe->matrice_adj[j][i]) {
+                nombre_antecedents[i]++;
+            }
+        }
+    }
+    while (1) {// boucle principal
+
+        int sommet_sans_antecedent = -1;// chercher les sommets sans antecendants et qui nesont pas marques
+        for (int i = 0; i < graphe->taille; i++) {
+            if (!marque[i] && nombre_antecedents[i] == 0) {
+                sommet_sans_antecedent = i;
+                break;
+            }
+        }
+        if (sommet_sans_antecedent == -1) {//on a pas trouve de sommet sans antecedent non marque
+            break; //on casse la boucle
+        }
+        int station_actuelle = 0;
+        while (temps_stations[station_actuelle] + temps_operation[sommet_sans_antecedent] > temps_cycle) { //si le temps de cycle est depasse alors on essaye la suivante
+            station_actuelle++;
+        }
+        stations[station_actuelle][taille_stations[station_actuelle]++] = sommet_sans_antecedent;// on ajoute un sommet a la station actuelle
+
+        temps_stations[station_actuelle] += temps_operation[sommet_sans_antecedent];//on change le temps de la station en focntion du sommet ajoute
+
+        marque[sommet_sans_antecedent] = 1;// on marque le sommet
+
+        for (int i = 0; i < graphe->taille; i++) {// on reduit par consequence le nombre d'antecedent des sommets qui suivent
+            if (graphe->matrice_adj[sommet_sans_antecedent][i]) {
+                nombre_antecedents[i]--;
+            }
+        }
+    }
+    for (int i = 0; i < graphe->taille; i++) { // afficher les stations avec les sommets/opérations présentes
+        if (temps_stations[i] > 0) {
+            printf("Station %d: ", i + 1);
+            for (int j = 0; j < taille_stations[i]; j++) {
+                printf("%d ", stations[i][j] + 1);
+            }
+            printf(" - Temps total : %.2f\n", temps_stations[i]);
+        }
+    }
+    for (int i = 0; i < graphe->taille; i++) {// on libere la memoire
+        free(stations[i]);
+    }
+    free(stations);
+    free(taille_stations);
+    free(temps_stations);
+    free(nombre_antecedents);
+    free(marque);
+    free(temps_operation);
+}
+
+int main() {
+    Graphe* g;
+    char fichier_precedences[] = "precedences.txt";
+    char fichier_sommets[] = "Sommets.txt";
+    char fichier_temps_operations[] = "operations.txt";
+    char fichier_temps_cycle[] = "temps_cycle.txt";
+
+    g = Lire_graphe(fichier_precedences, fichier_sommets);// on lit le graphe depuis les fichiers precdences et sommets
+
+    printf("Ordre topologique dans les stations avec temps : \n"); //on affichel'ordre topologique dans les stations avec un temps pour chacunes d'entre elles
+
+    Ordre_topologique_temps(g, fichier_temps_operations, fichier_temps_cycle);// on appelle l'odre topologique avec les fichiers operation et cycle
+    return 0;
+}
