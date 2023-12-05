@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 typedef struct { // Structure d'une station
     int nb_sommets;      // Nombre de sommet
@@ -53,6 +54,8 @@ int Repartir_stations(int taille, int E[][2], int nbContraintes, int sommets[], 
 int main() {
     int taille;// Taille du graphe
 
+    clock_t start_time=clock();
+
     FILE *fsommet = fopen("Sommets.txt", "r");// ouvre le fichier Sommets.txt
     if (fsommet == NULL) {
         perror("Erreur lors de l'ouverture du fichier des sommets");
@@ -91,6 +94,13 @@ int main() {
         }
         printf("\n");
     }
+
+    clock_t end_time = clock();
+    double elapsed_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+
+
+    printf("Temps de traitement : %f secondes\n",elapsed_time);
+
     printf("Le nombre minimal de stations est : %d\n", nbStations);// affichage du nombre minimal de station pour ce cas
     return 0;
 }
